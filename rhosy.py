@@ -56,17 +56,23 @@ def output_callback(out_data, frame_count, time_info, status):
 
 # Return a sine wave of frequency f.
 def make_sin(f):
-    assert f >= blocksize
     nsin = round(sample_rate / f)
+    if nsin < blocksize:
+        return silence_table
     t_period = np.linspace(0, 2 * np.pi, nsin, dtype=np.float32)
     return 0.8 * np.sin(t_period)
+
+# Precalculate wave tables
+notes = []
+for note in range(128):
+    f = 440 * 2 ** ((note - 69) / 12)
+    notes.append(make_sin(f))
 
 # Install wave table for note given MIDI key number.
 def play_note(note):
     global wave_table, t_output
-    f = 440 * 2 ** ((note - 69) / 12)
     t_output = 0
-    wave_table = make_sin(f)
+    wave_table = notes[note]
 
 # Install wave table for silence.
 def silence():
