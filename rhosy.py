@@ -16,10 +16,14 @@ blocksize = 16
 # MIDI controller is currently hardwired.
 controller = mido.open_input('USB Oxygen 8 v2 MIDI 1')
 
-nsin_440 = sample_rate // 440
-assert nsin_440 >= blocksize
-t_period = np.linspace(0, 2 * np.pi, nsin_440, dtype=np.float32)
-sin_440 = 0.8 * np.sin(t_period)
+def make_sin(f):
+    nsin = sample_rate // f
+    assert f >= blocksize
+    t_period = np.linspace(0, 2 * np.pi, nsin, dtype=np.float32)
+    return 0.8 * np.sin(t_period)
+
+sin_table = make_sin(440)
+nsin_table = len(sin_table)
 
 # The current output time used by the output callback.
 t_output = 0
@@ -38,12 +42,12 @@ def output_callback(out_data, frame_count, time_info, status):
         print("output callback:", status)
 
     # Wrap the output as needed.
-    t_start = t_output % nsin_440
-    t_end = (t_output + frame_count) % nsin_440
+    t_start = t_output % nsin_table
+    t_end = (t_output + frame_count) % nsin_table
     if t_start <= t_end:
-        output = sin_440[t_start:t_end]
+        output = sin_table[t_start:t_end]
     else:
-        output = np.append(sin_440[t_start:], sin_440[:t_end])
+        output = np.append(sin_table[t_start:], sin_table[:t_end])
 
     # Note that we need the out_data slicing to *replace*
     # the data in the array.
