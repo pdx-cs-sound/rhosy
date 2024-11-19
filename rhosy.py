@@ -1,10 +1,65 @@
-import mido
+import mido, sounddevice
+import numpy as np
+
+# Print MIDI note events if True.
+log_notes = True
+
+# Sample rate in sps. This doesn't need to be fixed: it
+# could be set to the preferred rate of the audio output.
+sample_rate = 48000
+
+# Blocksize in samples to process. My desktop machine keeps
+# up at this rate, which provides pretty good latency. Slower
+# machines may need larger numbers.
+blocksize = 16
 
 # MIDI controller is currently hardwired.
 controller = mido.open_input('USB Oxygen 8 v2 MIDI 1')
 
-# Print MIDI note events if True.
-log_notes = True
+nsin_440 = sample_rate // 440
+assert nsin_440 >= blocksize
+t_period = np.linspace(0, 2 * np.pi, nsin_440, dtype=np.float32)
+sin_440 = 0.8 * np.sin(t_period)
+
+# The current output time used by the output callback.
+t_output = 0
+
+# This callback is called by `sounddevice` to get some
+# samples to output. It's the heart of sound generation in
+# the synth.
+def output_callback(out_data, frame_count, time_info, status):
+    global t_output
+
+    # A non-None status indicates that something has
+    # happened with sound output that shouldn't have.  This
+    # is almost always an underrun due to generating samples
+    # too slowly.
+    if status:
+        print("output callback:", status)
+
+    # Wrap the output as needed.
+    t_start = t_output % nsin_440
+    t_end = (t_output + frame_count) % nsin_440
+    if t_start <= t_end:
+        output = sin_440[t_start:t_end]
+    else:
+        output = np.append(sin_440[t_start:], sin_440[:t_end])
+
+    # Note that we need the out_data slicing to *replace*
+    # the data in the array.
+    out_data[:] = output.reshape(frame_count,1)
+
+    # Advance the clock.
+    t_output += frame_count
+
+# Start audio playing. Must keep up with output from here on.
+output_stream = sounddevice.OutputStream(
+    samplerate=sample_rate,
+    channels=1,
+    blocksize=blocksize,
+    callback=output_callback,
+)
+output_stream.start()
 
 # Block waiting for the controller (keyboard) to send a MIDI
 # message, then handle it. Return False if the MIDI message
