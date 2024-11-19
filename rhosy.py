@@ -2,7 +2,7 @@ import mido, sounddevice
 import numpy as np
 
 # Print MIDI note events if True.
-log_notes = True
+log_notes = False
 
 # Sample rate in sps. This doesn't need to be fixed: it
 # could be set to the preferred rate of the audio output.
@@ -83,12 +83,14 @@ output_stream = sounddevice.OutputStream(
 )
 output_stream.start()
 
+# Last note on processed.
+last_played = None
+
 # Block waiting for the controller (keyboard) to send a MIDI
 # message, then handle it. Return False if the MIDI message
 # wants the instrument (synthesizer) to stop, True otherwise.
 def process_midi_event():
-    # These globals define the interface to sound generation.
-    global out_keys, out_osc
+    global last_played
 
     # Block until a MIDI message is received.
     mesg = controller.receive()
@@ -106,6 +108,7 @@ def process_midi_event():
         velocity = mesg.velocity / 127
         if log_notes:
             print('note on', key, mesg.velocity, round(velocity, 2))
+        last_played = key
         play_note(key)
     # Remove a note from the sound. If it is already off,
     # this message will be ignored.
@@ -114,7 +117,10 @@ def process_midi_event():
         velocity = round(mesg.velocity / 127, 2)
         if log_notes:
             print('note off', key, mesg.velocity, velocity)
-        silence()
+            print('last played', last_played)
+        if key == last_played:
+            last_played = None
+            silence()
     # Handle various controls.
     elif mesg.type == 'control_change':
         # XXX Hard-wired for "stop" key on Oxygen8.
