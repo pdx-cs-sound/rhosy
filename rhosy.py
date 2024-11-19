@@ -16,17 +16,14 @@ blocksize = 16
 # MIDI controller is currently hardwired.
 controller = mido.open_input('USB Oxygen 8 v2 MIDI 1')
 
-def make_sin(f):
-    nsin = sample_rate // f
-    assert f >= blocksize
-    t_period = np.linspace(0, 2 * np.pi, nsin, dtype=np.float32)
-    return 0.8 * np.sin(t_period)
-
-sin_table = make_sin(440)
-nsin_table = len(sin_table)
-
 # The current output time used by the output callback.
 t_output = 0
+
+# Wave table for silence.
+silence_table = np.zeros(blocksize, dtype=np.float32)
+
+# Currently playing wave table.
+wave_table = silence_table
 
 # This callback is called by `sounddevice` to get some
 # samples to output. It's the heart of sound generation in
@@ -42,12 +39,13 @@ def output_callback(out_data, frame_count, time_info, status):
         print("output callback:", status)
 
     # Wrap the output as needed.
-    t_start = t_output % nsin_table
-    t_end = (t_output + frame_count) % nsin_table
-    if t_start <= t_end:
-        output = sin_table[t_start:t_end]
+    nwave_table = len(wave_table)
+    t_start = t_output % nwave_table
+    t_end = (t_output + frame_count) % nwave_table
+    if t_start < t_end:
+        output = wave_table[t_start:t_end]
     else:
-        output = np.append(sin_table[t_start:], sin_table[:t_end])
+        output = np.append(wave_table[t_start:], wave_table[:t_end])
 
     # Note that we need the out_data slicing to *replace*
     # the data in the array.
@@ -55,6 +53,26 @@ def output_callback(out_data, frame_count, time_info, status):
 
     # Advance the clock.
     t_output += frame_count
+
+# Return a sine wave of frequency f.
+def make_sin(f):
+    assert f >= blocksize
+    nsin = round(sample_rate / f)
+    t_period = np.linspace(0, 2 * np.pi, nsin, dtype=np.float32)
+    return 0.8 * np.sin(t_period)
+
+# Install wave table for note given MIDI key number.
+def play_note(note):
+    global wave_table, t_output
+    f = 440 * 2 ** ((note - 69) / 12)
+    t_output = 0
+    wave_table = make_sin(f)
+
+# Install wave table for silence.
+def silence():
+    global wave_table, t_output
+    t_output = 0
+    wave_table = silence_table
 
 # Start audio playing. Must keep up with output from here on.
 output_stream = sounddevice.OutputStream(
@@ -88,7 +106,7 @@ def process_midi_event():
         velocity = mesg.velocity / 127
         if log_notes:
             print('note on', key, mesg.velocity, round(velocity, 2))
-        # out_keys[key] = Note(key, out_osc)
+        play_note(key)
     # Remove a note from the sound. If it is already off,
     # this message will be ignored.
     elif mesg_type == 'note_off':
@@ -96,8 +114,7 @@ def process_midi_event():
         velocity = round(mesg.velocity / 127, 2)
         if log_notes:
             print('note off', key, mesg.velocity, velocity)
-        #if key in out_keys:
-        #    out_keys[key].release()
+        silence()
     # Handle various controls.
     elif mesg.type == 'control_change':
         # XXX Hard-wired for "stop" key on Oxygen8.
