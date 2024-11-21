@@ -38,6 +38,7 @@ silence_table = np.zeros(blocksize, dtype=np.float32)
 class Note:
     def __init__(self, key=None):
         self.t = 0
+        self.key = key
         if key is None:
             self.wave_table = silence_table
         else:
@@ -61,12 +62,12 @@ class Note:
         # Get the samples.
         self.t += frame_count
         return output
-        
+
 # Silence "note".
 silence = Note()
 
-# Currently playing note.
-current_note = silence
+# Currently playing notes.
+current_notes = dict()
 
 # This callback is called by `sounddevice` to get some
 # samples to output. It's the heart of sound generation in
@@ -79,8 +80,10 @@ def output_callback(out_data, frame_count, time_info, status):
     if status:
         print("output callback:", status)
 
-    # Get samples from note.
-    output = current_note.play(frame_count)
+    # Mix samples from notes.
+    output = silence.play(frame_count)
+    for note in current_notes.values():
+        output += note.play(frame_count)
 
     # Note that we need the out_data slicing to *replace*
     # the data in the array.
@@ -88,8 +91,13 @@ def output_callback(out_data, frame_count, time_info, status):
 
 # Install wave table for note given MIDI key number.
 def play_note(key=None):
-    global current_note
-    current_note = Note(key)
+    global current_notes
+    current_notes[key] = Note(key)
+
+# Install wave table for note given MIDI key number.
+def release_note(key):
+    global current_notes
+    del current_notes[key]
 
 # Start audio playing. Must keep up with output from here on.
 output_stream = sounddevice.OutputStream(
@@ -100,15 +108,10 @@ output_stream = sounddevice.OutputStream(
 )
 output_stream.start()
 
-# Last note on processed.
-last_played = None
-
 # Block waiting for the controller (keyboard) to send a MIDI
 # message, then handle it. Return False if the MIDI message
 # wants the instrument (synthesizer) to stop, True otherwise.
 def process_midi_event():
-    global last_played
-
     # Block until a MIDI message is received.
     mesg = controller.receive()
 
@@ -125,7 +128,6 @@ def process_midi_event():
         velocity = mesg.velocity / 127
         if log_notes:
             print('note on', key, mesg.velocity, round(velocity, 2))
-        last_played = key
         play_note(key=key)
     # Remove a note from the sound. If it is already off,
     # this message will be ignored.
@@ -134,10 +136,7 @@ def process_midi_event():
         velocity = round(mesg.velocity / 127, 2)
         if log_notes:
             print('note off', key, mesg.velocity, velocity)
-            print('last played', last_played)
-        if key == last_played:
-            last_played = None
-            play_note()
+        release_note(key)
     # Handle various controls.
     elif mesg.type == 'control_change':
         # XXX Hard-wired for "stop" key on Oxygen8.
@@ -162,7 +161,6 @@ def process_midi_event():
     else:
         print('unknown MIDI message', mesg)
     return True
-
 
 # Run the instrument until the controller stop key is pressed.
 while process_midi_event():
