@@ -1,8 +1,8 @@
-import mido, sounddevice
+import math, mido, sounddevice
 import numpy as np
 
 # Print MIDI note events if True.
-log_notes = False
+log_notes = True
 
 # Sample rate in sps. This doesn't need to be fixed: it
 # could be set to the preferred rate of the audio output.
@@ -56,10 +56,12 @@ def output_callback(out_data, frame_count, time_info, status):
 
 # Return a sine wave of frequency f.
 def make_sin(f):
-    nsin = round(sample_rate / f)
-    if nsin < blocksize:
-        return silence_table
-    t_period = np.linspace(0, 2 * np.pi, nsin, dtype=np.float32)
+    period = sample_rate / f
+    # Need enough cycles to be able to wrap around when
+    # generating a block.
+    ncycles = math.ceil(blocksize / period)
+    nsin = round(ncycles * period)
+    t_period = np.linspace(0, ncycles * (2 * np.pi), nsin, dtype=np.float32)
     return 0.8 * np.sin(t_period)
 
 # Precalculate wave tables
