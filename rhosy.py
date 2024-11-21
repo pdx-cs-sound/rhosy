@@ -24,7 +24,8 @@ def make_sin(f):
     ncycles = math.ceil(blocksize / period)
     nsin = round(ncycles * period)
     t_period = np.linspace(0, ncycles * (2 * np.pi), nsin, dtype=np.float32)
-    return 0.8 * np.sin(t_period)
+    # Allow for eight notes before clipping.
+    return 0.125 * np.sin(t_period)
 
 # Precalculate wave tables
 notes = []
