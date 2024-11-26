@@ -4,6 +4,9 @@ import numpy as np
 # Print MIDI note events if True.
 log_notes = True
 
+# Print envelope events if True.
+log_envelope = True
+
 # Sample rate in sps. This doesn't need to be fixed: it
 # could be set to the preferred rate of the audio output.
 sample_rate = 48000
@@ -38,7 +41,9 @@ class Note:
         self.t = 0
         self.key = key
         self.release_rate = None
-        self.attack_rate = 20 * sample_rate / 1000
+        # Hardwire to 20ms for now.
+        attack_samples = 10 * sample_rate / 1000
+        self.attack_rate = 1.0 / attack_samples
         self.attack_amplitude = 0
         self.wave_table = notes[key]
     
@@ -60,7 +65,8 @@ class Note:
         # Handle release as needed.
         if self.release_rate:
             if self.release_amplitude <= 0:
-                print("finishing note", self.key)
+                if log_envelope:
+                    print("finishing note", self.key, self.t)
                 return None
             end_amplitude = \
                 self.release_amplitude - frame_count * self.release_rate
@@ -82,8 +88,9 @@ class Note:
                 frame_count,
             ).clip(0, 1)
             output = output * scale
-            if self.attack_amplitude >= 1:
-                print("finishing attack", self.key)
+            if end_amplitude >= 1:
+                if log_envelope:
+                    print("finishing attack", self.key, self.t)
                 self.attack_rate = None
             else:
                 self.attack_amplitude = end_amplitude
@@ -94,7 +101,8 @@ class Note:
 
     # Mark the note as released and start the release timer.
     def release(self):
-        print("releasing note", self.key)
+        if log_envelope:
+            print("releasing note", self.key, self.t)
         # Hardcode release time to 100ms
         release_samples = 100 * sample_rate / 1000
         self.release_rate = 1.0 / release_samples
