@@ -40,6 +40,7 @@ class Note:
     def __init__(self, key=None):
         self.t = 0
         self.key = key
+        self.release_rate = None
         if key is None:
             self.wave_table = silence_table
         else:
@@ -60,9 +61,32 @@ class Note:
         else:
             output = np.append(wave_table[t_start:], wave_table[:t_end])
 
+        # Handle release as needed.
+        if self.release_rate:
+            if self.release_amplitude <= 0:
+                print("finishing note", self.key)
+                return None
+            end_amplitude = \
+                self.release_amplitude - frame_count * self.release_rate
+            scale = np.linspace(
+                self.release_amplitude,
+                end_amplitude,
+                frame_count,
+            ).clip(0, 1)
+            output = output * scale
+            self.release_amplitude = np.max(end_amplitude, 0)
+            
         # Get the samples.
         self.t += frame_count
         return output
+
+    # Mark the note as released and start the release timer.
+    def release(self):
+        print("releasing note", self.key)
+        # Hardcode release time to 100ms
+        release_samples = 100 * sample_rate / 1000
+        self.release_rate = 1.0 / release_samples
+        self.release_amplitude = 1.0
 
 # Silence "note".
 silence = Note()
@@ -74,6 +98,8 @@ current_notes = dict()
 # samples to output. It's the heart of sound generation in
 # the synth.
 def output_callback(out_data, frame_count, time_info, status):
+    global current_notes
+
     # A non-None status indicates that something has
     # happened with sound output that shouldn't have.  This
     # is almost always an underrun due to generating samples
@@ -83,8 +109,17 @@ def output_callback(out_data, frame_count, time_info, status):
 
     # Mix samples from notes.
     output = silence.play(frame_count)
-    for note in current_notes.values():
-        output += note.play(frame_count)
+    finished_keys = []
+    for key, note in current_notes.items():
+        sound = note.play(frame_count)
+        if sound is None:
+            finished_keys.append(key)
+        else:
+            output += sound
+
+    # Remove finished notes.
+    for key in finished_keys:
+        del current_notes[key]
 
     # Note that we need the out_data slicing to *replace*
     # the data in the array.
@@ -98,7 +133,7 @@ def play_note(key=None):
 # Install wave table for note given MIDI key number.
 def release_note(key):
     global current_notes
-    del current_notes[key]
+    current_notes[key].release()
 
 # Start audio playing. Must keep up with output from here on.
 output_stream = sounddevice.OutputStream(
