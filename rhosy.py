@@ -33,18 +33,14 @@ for note in range(128):
     f = 440 * 2 ** ((note - 69) / 12)
     notes.append(make_sin(f))
 
-# Wave table for silence.
-silence_table = np.zeros(blocksize, dtype=np.float32)
-
 class Note:
-    def __init__(self, key=None):
+    def __init__(self, key):
         self.t = 0
         self.key = key
         self.release_rate = None
-        if key is None:
-            self.wave_table = silence_table
-        else:
-            self.wave_table = notes[key]
+        self.attack_rate = 20 * sample_rate / 1000
+        self.attack_amplitude = 0
+        self.wave_table = notes[key]
     
     # Returns a requested block of samples.
     def play(self, frame_count):
@@ -76,6 +72,22 @@ class Note:
             output = output * scale
             self.release_amplitude = np.max(end_amplitude, 0)
             
+        # Handle attack as needed.
+        if self.attack_rate:
+            end_amplitude = \
+                self.attack_amplitude + frame_count * self.attack_rate
+            scale = np.linspace(
+                self.attack_amplitude,
+                end_amplitude,
+                frame_count,
+            ).clip(0, 1)
+            output = output * scale
+            if self.attack_amplitude >= 1:
+                print("finishing attack", self.key)
+                self.attack_rate = None
+            else:
+                self.attack_amplitude = end_amplitude
+
         # Get the samples.
         self.t += frame_count
         return output
@@ -87,9 +99,9 @@ class Note:
         release_samples = 100 * sample_rate / 1000
         self.release_rate = 1.0 / release_samples
         self.release_amplitude = 1.0
-
-# Silence "note".
-silence = Note()
+        if self.attack_rate:
+            self.release_amplitude = self.attack_amplitude
+            self.attack_rate = None
 
 # Currently playing notes.
 current_notes = dict()
@@ -108,7 +120,7 @@ def output_callback(out_data, frame_count, time_info, status):
         print("output callback:", status)
 
     # Mix samples from notes.
-    output = silence.play(frame_count)
+    output = np.zeros(frame_count, dtype = np.float32)
     finished_keys = []
     for key, note in current_notes.items():
         sound = note.play(frame_count)
