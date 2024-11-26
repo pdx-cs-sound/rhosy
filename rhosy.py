@@ -153,7 +153,9 @@ def play_note(key=None):
 # Install wave table for note given MIDI key number.
 def release_note(key):
     global current_notes
-    current_notes[key].release()
+    # XXX Kludge to hide but not fix race condition.
+    if key in current_notes:
+        current_notes[key].release()
 
 # Start audio playing. Must keep up with output from here on.
 output_stream = sounddevice.OutputStream(
