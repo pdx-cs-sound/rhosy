@@ -1,4 +1,4 @@
-import math, mido, sounddevice
+import math, mido, queue, sounddevice
 import numpy as np
 
 # Print MIDI note events if True.
@@ -114,11 +114,14 @@ class Note:
 # Currently playing notes.
 current_notes = dict()
 
+# Queue of MIDI messages for state changes.
+command_queue = queue.SimpleQueue()
+
 # This callback is called by `sounddevice` to get some
 # samples to output. It's the heart of sound generation in
 # the synth.
 def output_callback(out_data, frame_count, time_info, status):
-    global current_notes
+    global current_notes, command_queue
 
     # A non-None status indicates that something has
     # happened with sound output that shouldn't have.  This
@@ -126,6 +129,16 @@ def output_callback(out_data, frame_count, time_info, status):
     # too slowly.
     if status:
         print("output callback:", status)
+
+    while not command_queue.empty():
+        mesg_type, mesg = command_queue.get()
+        key = mesg.note
+        if mesg_type == 'note_on':
+            current_notes[key] = Note(key)
+        elif mesg_type == 'note_off':
+            current_notes[key].release()
+        else:
+            raise Exception("bad message in command queue")
 
     # Mix samples from notes.
     output = np.zeros(frame_count, dtype = np.float32)
@@ -145,18 +158,6 @@ def output_callback(out_data, frame_count, time_info, status):
     # the data in the array.
     out_data[:] = output.reshape(frame_count,1)
 
-# Install wave table for note given MIDI key number.
-def play_note(key=None):
-    global current_notes
-    current_notes[key] = Note(key)
-
-# Install wave table for note given MIDI key number.
-def release_note(key):
-    global current_notes
-    # XXX Kludge to hide but not fix race condition.
-    if key in current_notes:
-        current_notes[key].release()
-
 # Start audio playing. Must keep up with output from here on.
 output_stream = sounddevice.OutputStream(
     samplerate=sample_rate,
@@ -169,7 +170,7 @@ output_stream.start()
 # Block waiting for the controller (keyboard) to send a MIDI
 # message, then handle it. Return False if the MIDI message
 # wants the instrument (synthesizer) to stop, True otherwise.
-def process_midi_event():
+def get_midi_event(controller):
     # Block until a MIDI message is received.
     mesg = controller.receive()
 
@@ -186,7 +187,7 @@ def process_midi_event():
         velocity = mesg.velocity / 127
         if log_notes:
             print('note on', key, mesg.velocity, round(velocity, 2))
-        play_note(key=key)
+        command_queue.put((mesg_type, mesg))
     # Remove a note from the sound. If it is already off,
     # this message will be ignored.
     elif mesg_type == 'note_off':
@@ -194,7 +195,7 @@ def process_midi_event():
         velocity = round(mesg.velocity / 127, 2)
         if log_notes:
             print('note off', key, mesg.velocity, velocity)
-        release_note(key)
+        command_queue.put((mesg_type, mesg))
     # Handle various controls.
     elif mesg.type == 'control_change':
         # XXX Hard-wired for "stop" key on Oxygen8.
@@ -221,5 +222,5 @@ def process_midi_event():
     return True
 
 # Run the instrument until the controller stop key is pressed.
-while process_midi_event():
+while get_midi_event(controller):
     pass
