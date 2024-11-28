@@ -63,6 +63,7 @@ class Note:
         self.attack_rate = 1.0 / attack_samples
         self.attack_amplitude = 0
         self.wave_table = notes[key]
+        self.held = False
     
     # Returns a requested block of samples.
     def play(self, frame_count):
@@ -80,7 +81,7 @@ class Note:
             output = np.append(wave_table[t_start:], wave_table[:t_end])
 
         # Handle release as needed.
-        if self.release_rate:
+        if self.release_rate and not self.held:
             if self.release_amplitude <= 0:
                 if log_envelope:
                     print("finishing note", self.key, self.t)
@@ -128,17 +129,28 @@ class Note:
             self.release_amplitude = self.attack_amplitude
             self.attack_rate = None
 
+    # Mark the current note as held by sustain pedal.
+    def hold(self):
+        self.held = True
+    
+    # Mark the current note as no longer held by sustain pedal.
+    def unhold(self):
+        self.held = False
+
 # Currently playing notes.
 current_notes = dict()
 
 # Queue of MIDI messages for state changes.
 command_queue = queue.SimpleQueue()
 
+# Sustain pedal is held.
+sustaining = False
+
 # This callback is called by `sounddevice` to get some
 # samples to output. It's the heart of sound generation in
 # the synth.
 def output_callback(out_data, frame_count, time_info, status):
-    global current_notes, command_queue
+    global current_notes, command_queue, sustaining
 
     # A non-None status indicates that something has
     # happened with sound output that shouldn't have.  This
@@ -149,13 +161,24 @@ def output_callback(out_data, frame_count, time_info, status):
 
     while not command_queue.empty():
         mesg_type, mesg = command_queue.get()
-        key = mesg.note
         if mesg_type == 'note_on':
-            current_notes[key] = Note(key)
+            key = mesg.note
+            new_note = Note(key)
+            if sustaining:
+                new_note.held = True
+            current_notes[key] = new_note
         elif mesg_type == 'note_off':
+            key = mesg.note
             current_notes[key].release()
+        elif mesg_type == 'sustain_pedal':
+            sustaining = mesg.value > 0
+            for note in current_notes.values():
+                if sustaining:
+                    note.hold()
+                else:
+                    note.unhold()
         else:
-            raise Exception("bad message in command queue")
+            raise Exception(f"bad message in command queue: {mesg_type} {mesg}")
 
     # Mix samples from notes.
     output = np.zeros(frame_count, dtype = np.float32)
@@ -227,6 +250,10 @@ def get_midi_event(controller):
         elif mesg.control == 21 or mesg.control == 22:
             print('program change')
             #out_osc = (out_osc + 1) % 2
+        # Sustain pedal press / release.
+        elif mesg.control == 64:
+            print('sustain pedal', mesg.value)
+            command_queue.put(('sustain_pedal', mesg))
         # Unknown control changes are logged and ignored.
         else:
             print(f"control", mesg.control, mesg.value)
