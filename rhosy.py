@@ -1,4 +1,4 @@
-import math, mido, queue, sounddevice
+import re, math, mido, queue, sounddevice
 import numpy as np
 
 # Print MIDI note events if True.
@@ -16,8 +16,25 @@ sample_rate = 48000
 # machines may need larger numbers.
 blocksize = 16
 
-# MIDI controller is currently hardwired.
-controller = mido.open_input('USB Oxygen 8 v2 MIDI 1')
+# Pick a MIDI controller.
+controllers = {
+    'USB Oxygen 8 v2 MIDI 1',
+}
+input_name_re = re.compile(r"[^:]*:(.*) [0-9]*:[0-9]*")
+inputs = mido.get_input_names()
+controller_name = None
+for input_name in inputs:
+    m = input_name_re.fullmatch(input_name)
+    if m is None:
+        continue
+    name = m[1]
+    if name in controllers:
+        controller_name = name
+        break
+if controller_name is None:
+    print("No controller")
+    exit(1)
+controller = mido.open_input(controller_name)
 
 # Return a sine wave of frequency f.
 def make_sin(f):
