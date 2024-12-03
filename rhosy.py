@@ -52,14 +52,14 @@ def make_sin(f):
 
 # Return an ascending saw wave of frequency f.
 def make_saw(f):
-    period = round(sample_rate / f)
-    # Need enough cycles to be able to wrap around when
-    # generating a block.
+    period = sample_rate / f
     ncycles = math.ceil(blocksize / period)
-    nsaw = ncycles * period
-    t_period = np.linspace(0, ncycles, nsaw, dtype=np.float32)
+    nsaw = round(ncycles * period)
+    t_period = np.linspace(0, ncycles * period, nsaw, dtype=np.float32)
+    # Normalize the values to range from -1 to 1.
+    saw_wave = 2 * (t_period % period) / period - 1
     # Allow for eight notes before clipping.
-    return 0.125 * (2 * (t_period % period) - 1)
+    return 0.125 * saw_wave
 
 # Types of waves.
 wave_types = {
@@ -84,7 +84,7 @@ class Note:
         self.attack_amplitude = 0
         self.wave_table = notes[key]
         self.held = False
-    
+
     # Returns a requested block of samples.
     def play(self, frame_count):
         # Cache some state.
@@ -115,7 +115,7 @@ class Note:
             ).clip(0, 1)
             output = output * scale
             self.release_amplitude = np.max(end_amplitude, 0)
-            
+
         # Handle attack as needed.
         if self.attack_rate:
             end_amplitude = \
@@ -152,7 +152,7 @@ class Note:
     # Mark the current note as held by sustain pedal.
     def hold(self):
         self.held = True
-    
+
     # Mark the current note as no longer held by sustain pedal.
     def unhold(self):
         self.held = False
