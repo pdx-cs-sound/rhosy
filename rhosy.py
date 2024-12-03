@@ -14,7 +14,7 @@ sample_rate = 48000
 # Blocksize in samples to process. My desktop machine keeps
 # up at this rate, which provides pretty good latency. Slower
 # machines may need larger numbers.
-blocksize = 16
+blocksize = 64
 
 # Pick a MIDI controller.
 controllers = {
