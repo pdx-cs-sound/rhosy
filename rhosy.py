@@ -1,6 +1,9 @@
 import re, math, mido, queue, sounddevice
 import numpy as np
 
+# For now, pick a default wave shape.
+wave_shape = "saw"
+
 # Print MIDI note events if True.
 log_notes = True
 
@@ -47,11 +50,28 @@ def make_sin(f):
     # Allow for eight notes before clipping.
     return 0.125 * np.sin(t_period)
 
+# Return an ascending saw wave of frequency f.
+def make_saw(f):
+    period = round(sample_rate / f)
+    # Need enough cycles to be able to wrap around when
+    # generating a block.
+    ncycles = math.ceil(blocksize / period)
+    nsaw = ncycles * period
+    t_period = np.linspace(0, ncycles, nsaw, dtype=np.float32)
+    # Allow for eight notes before clipping.
+    return 0.125 * (2 * (t_period % period) - 1)
+
+# Types of waves.
+wave_types = {
+    "sine" : make_sin,
+    "saw" : make_saw,
+}
+
 # Precalculate wave tables
 notes = []
 for note in range(128):
     f = 440 * 2 ** ((note - 69) / 12)
-    notes.append(make_sin(f))
+    notes.append(wave_types[wave_shape](f))
 
 class Note:
     def __init__(self, key):
