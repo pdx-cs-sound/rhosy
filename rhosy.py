@@ -85,7 +85,7 @@ class Note:
         self.attack_amplitude = 0
         self.wave_table = notes[key]
         self.held = False
-
+    
     # Returns a requested block of samples.
     def play(self, frame_count):
         # Cache some state.
@@ -116,7 +116,7 @@ class Note:
             ).clip(0, 1)
             output = output * scale
             self.release_amplitude = np.max(end_amplitude, 0)
-    
+            
         # Handle attack as needed.
         if self.attack_rate:
             end_amplitude = \
@@ -153,7 +153,7 @@ class Note:
     # Mark the current note as held by sustain pedal.
     def hold(self):
         self.held = True
-
+    
     # Mark the current note as no longer held by sustain pedal.
     def unhold(self):
         self.held = False
