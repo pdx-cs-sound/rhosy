@@ -32,9 +32,10 @@ for input_name in inputs:
         controller_name = name
         break
 if controller_name is None:
-    print("No controller")
-    exit(1)
-controller = mido.open_input(controller_name)
+    print("No controller: waiting for connection")
+    controller = mido.open_input('rhosy', virtual=True)
+else:
+    controller = mido.open_input(controller_name)
 
 # Return a sine wave of frequency f.
 def make_sin(f):
