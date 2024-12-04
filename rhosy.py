@@ -1,8 +1,8 @@
-import re, math, mido, queue, sounddevice
+import re, math, mido, queue, sounddevice, wave
 import numpy as np
 
 # For now, pick a default wave shape.
-wave_shape = "saw"
+wave_shape = "table"
 
 # Print MIDI note events if True.
 log_notes = True
@@ -51,6 +51,7 @@ def make_sin(f):
     return 0.125 * np.sin(t_period)
 
 # Return an ascending saw wave of frequency f.
+# XXX Currently broken.
 def make_saw(f):
     period = round(sample_rate / f)
     # Need enough cycles to be able to wrap around when
@@ -61,10 +62,34 @@ def make_saw(f):
     # Allow for eight notes before clipping.
     return 0.125 * (2 * (t_period % period) - 1)
 
+# Return a wave table built from a sound.
+# XXX WAV file currently hardwired.
+wavetable = None
+# XXX WAV frequency currently hardwired.
+wave_frequency = 349
+def make_table(f):
+    global wavetable
+    if wavetable is None:
+        wav = wave.open("table.wav", "rb")
+        assert wav.getnchannels() == 1
+        assert wav.getframerate() == 48000
+        assert wav.getsampwidth() == 2
+        nframes = wav.getnframes()
+        w = wav.readframes(nframes)
+        wavetable = np.frombuffer(w, dtype=np.int16).astype(np.float32) / 32768
+    nframes_in = len(wavetable)
+    scale = wave_frequency / f
+    nframes_out = int(nframes_in / scale)
+    xs_out = np.linspace(0, nframes_in, nframes_out)
+    xs_in = np.linspace(0, nframes_in, nframes_in)
+    waves = np.interp(xs_out, xs_in, wavetable)
+    return 0.125 * waves
+
 # Types of waves.
 wave_types = {
     "sine" : make_sin,
     "saw" : make_saw,
+    "table": make_table,
 }
 
 # Precalculate wave tables
