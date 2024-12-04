@@ -1,6 +1,9 @@
 import re, math, mido, queue, sounddevice
 import numpy as np
 
+# For now, pick a default wave shape.
+wave_shape = "saw"
+
 # Print MIDI note events if True.
 log_notes = True
 
@@ -47,11 +50,26 @@ def make_sin(f):
     # Allow for eight notes before clipping.
     return 0.125 * np.sin(t_period)
 
+# Return an ascending saw wave of frequency f.
+def make_saw(f):
+    period = sample_rate / f
+    ncycles = math.ceil(blocksize / period)
+    nsaw = round(ncycles * period)
+    t_period = np.linspace(0, ncycles * period, nsaw, dtype=np.float32)
+    # Allow for eight notes before clipping.
+    return 0.125 * 2 * (t_period % period) / period - 1f
+
+# Types of waves.
+wave_types = {
+    "sine" : make_sin,
+    "saw" : make_saw,
+}
+
 # Precalculate wave tables
 notes = []
 for note in range(128):
     f = 440 * 2 ** ((note - 69) / 12)
-    notes.append(make_sin(f))
+    notes.append(wave_types[wave_shape](f))
 
 class Note:
     def __init__(self, key):
@@ -95,7 +113,7 @@ class Note:
             ).clip(0, 1)
             output = output * scale
             self.release_amplitude = np.max(end_amplitude, 0)
-            
+
         # Handle attack as needed.
         if self.attack_rate:
             end_amplitude = \
@@ -132,7 +150,7 @@ class Note:
     # Mark the current note as held by sustain pedal.
     def hold(self):
         self.held = True
-    
+
     # Mark the current note as no longer held by sustain pedal.
     def unhold(self):
         self.held = False
