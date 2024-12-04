@@ -78,8 +78,7 @@ def make_table(f):
         w = wav.readframes(nframes)
         wavetable = np.frombuffer(w, dtype=np.int16).astype(np.float32) / 32768
     nframes_in = len(wavetable)
-    scale = wave_frequency / f
-    nframes_out = int(nframes_in / scale)
+    nframes_out = int(nframes_in * wave_frequency / f)
     xs_out = np.linspace(0, nframes_in, nframes_out)
     xs_in = np.linspace(0, nframes_in, nframes_in)
     waves = np.interp(xs_out, xs_in, wavetable)
