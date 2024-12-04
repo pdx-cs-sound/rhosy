@@ -4,9 +4,6 @@ import numpy as np
 # For now, pick a default wave shape.
 wave_shape = "saw"
 
-# For now, pick a default wave shape.
-wave_shape = "saw"
-
 # Print MIDI note events if True.
 log_notes = True
 
