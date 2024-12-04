@@ -53,6 +53,8 @@ def make_sin(f):
 # Return an ascending saw wave of frequency f.
 def make_saw(f):
     period = sample_rate / f
+    # Need enough cycles to be able to wrap around when
+    # generating a block.
     ncycles = math.ceil(blocksize / period)
     nsaw = round(ncycles * period)
     t_period = np.linspace(0, ncycles * period, nsaw, dtype=np.float32)
