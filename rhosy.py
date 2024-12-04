@@ -4,6 +4,9 @@ import numpy as np
 # For now, pick a default wave shape.
 wave_shape = "saw"
 
+# For now, pick a default wave shape.
+wave_shape = "saw"
+
 # Print MIDI note events if True.
 log_notes = True
 
@@ -82,7 +85,7 @@ class Note:
         self.attack_amplitude = 0
         self.wave_table = notes[key]
         self.held = False
-    
+
     # Returns a requested block of samples.
     def play(self, frame_count):
         # Cache some state.
@@ -150,7 +153,7 @@ class Note:
     # Mark the current note as held by sustain pedal.
     def hold(self):
         self.held = True
-
+    
     # Mark the current note as no longer held by sustain pedal.
     def unhold(self):
         self.held = False
