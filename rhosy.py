@@ -57,9 +57,9 @@ def make_saw(f):
     # generating a block.
     ncycles = math.ceil(blocksize / period)
     nsaw = ncycles * period
-    t_period = np.linspace(0, ncycles, nsaw, dtype=np.float32)
+    t_period = np.linspace(0, ncycles * period, nsaw, dtype=np.float32)
     # Allow for eight notes before clipping.
-    return 0.125 * (2 * (t_period % period) - 1)
+    return 0.125 * (2 * (t_period % period) / period - 1)
 
 # Types of waves.
 wave_types = {
