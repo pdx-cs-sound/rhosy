@@ -32,7 +32,14 @@ for input_name in inputs:
         controller_name = name
         break
 if controller_name is None:
-    print("No controller: waiting for connection")
+    print("No supported controller — controllers found:")
+    for input_name in mido.get_input_names():
+        m = input_name_re.fullmatch(input_name)
+        if m is None:
+            continue
+        name = m[1]
+        print(' ', name)
+    print("Waiting for controller connection")
     controller = mido.open_input('rhosy', virtual=True)
 else:
     controller = mido.open_input(controller_name)
